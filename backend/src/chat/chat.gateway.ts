@@ -13,6 +13,8 @@ import { ChatService } from './chat.service';
 import { JwtService } from '@nestjs/jwt';
 import { RedisService } from '../redis/redis.service';
 import { JwtPayload } from '../auth/auth.types';
+import { SessionsService } from '../auth/sessions.service';
+import { PrismaService } from '../prisma/prisma.service';
 import { createAdapter } from '@socket.io/redis-adapter';
 import { Logger } from '@nestjs/common';
 
@@ -42,6 +44,8 @@ export class ChatGateway
     private readonly chatService: ChatService,
     private readonly jwtService: JwtService,
     private readonly redis: RedisService,
+    private readonly sessionsService: SessionsService,
+    private readonly prisma: PrismaService,
   ) {}
 
   private userSocketKey(userId: string) {
@@ -79,6 +83,17 @@ export class ChatGateway
 
       const payload = await this.jwtService.verifyAsync<JwtPayload>(token);
       const userId = payload.sub;
+
+      if (!payload.jti) throw new Error('Token has no session id');
+      const session = await this.sessionsService.findActiveByJti(payload.jti);
+      if (!session) throw new Error('Session revoked');
+
+      const user = await this.prisma.user.findUnique({
+        where: { id: userId },
+        select: { isBlocked: true, isDeleted: true },
+      });
+      if (!user || user.isDeleted || user.isBlocked)
+        throw new Error('Account disabled');
 
       await this.redis.client.set(
         this.userSocketKey(userId),

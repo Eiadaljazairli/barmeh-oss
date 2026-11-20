@@ -11,6 +11,7 @@ import {
   HttpCode,
   HttpStatus,
   BadRequestException,
+  NotFoundException,
 } from '@nestjs/common';
 import { Throttle } from '@nestjs/throttler';
 import { UsersService } from './users.service';
@@ -97,6 +98,7 @@ export class UsersController {
       req.user.sub,
       body,
       req.user.isAdmin,
+      req.user.jti,
     );
   }
 
@@ -111,6 +113,7 @@ export class UsersController {
       req.user.sub,
       body,
       req.user.isAdmin,
+      req.user.jti,
     );
   }
 
@@ -258,7 +261,12 @@ export class UsersController {
     @Request() req: AuthRequest,
     @Param('id') sessionId: string,
   ) {
-    await this.sessionsService.revoke(sessionId, 'user_revoked');
+    const revoked = await this.sessionsService.revokeForUser(
+      req.user.sub,
+      sessionId,
+      'user_revoked',
+    );
+    if (!revoked) throw new NotFoundException('الجلسة غير موجودة');
     return { message: 'تم إلغاء الجلسة بنجاح' };
   }
 

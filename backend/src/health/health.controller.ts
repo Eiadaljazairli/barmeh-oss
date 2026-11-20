@@ -3,7 +3,10 @@ import {
   Get,
   Logger,
   ServiceUnavailableException,
+  UseGuards,
 } from '@nestjs/common';
+import { JwtAuthGuard } from '../auth/jwt-auth.guard';
+import { AdminGuard } from '../auth/admin.guard';
 import {
   HealthCheckService,
   HealthCheck,
@@ -68,6 +71,7 @@ export class HealthController {
   }
 
   @Get('deep')
+  @UseGuards(JwtAuthGuard, AdminGuard)
   @HealthCheck()
   async checkDeep() {
     const mem = process.memoryUsage();

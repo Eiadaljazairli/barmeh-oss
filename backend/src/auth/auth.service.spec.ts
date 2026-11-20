@@ -14,7 +14,8 @@ import { UnauthorizedException, BadRequestException } from '@nestjs/common';
 import * as argon2 from 'argon2';
 
 process.env.GOOGLE_CLIENT_ID_WEB = 'test-web.apps.googleusercontent.com';
-process.env.GOOGLE_CLIENT_ID_ANDROID = 'test-android.apps.googleusercontent.com';
+process.env.GOOGLE_CLIENT_ID_ANDROID =
+  'test-android.apps.googleusercontent.com';
 process.env.GOOGLE_CLIENT_ID_IOS = 'test-ios.apps.googleusercontent.com';
 
 jest.mock('argon2');
@@ -73,6 +74,7 @@ describe('AuthService (Email/Password & OTP)', () => {
           useValue: {
             createSession: jest.fn().mockResolvedValue(undefined),
             clearSession: jest.fn().mockResolvedValue(undefined),
+            revokeAllForUser: jest.fn().mockResolvedValue({ count: 0 }),
             terminateSession: jest.fn().mockResolvedValue(undefined),
             terminateAllOtherSessions: jest.fn().mockResolvedValue(undefined),
           },
@@ -202,12 +204,9 @@ describe('AuthService (Email/Password & OTP)', () => {
   });
 
   describe('googleLogin', () => {
-    const WEB_CLIENT_ID =
-      'test-web.apps.googleusercontent.com';
-    const ANDROID_CLIENT_ID =
-      'test-android.apps.googleusercontent.com';
-    const IOS_CLIENT_ID =
-      'test-ios.apps.googleusercontent.com';
+    const WEB_CLIENT_ID = 'test-web.apps.googleusercontent.com';
+    const ANDROID_CLIENT_ID = 'test-android.apps.googleusercontent.com';
+    const IOS_CLIENT_ID = 'test-ios.apps.googleusercontent.com';
 
     const mockVerify = (payload: Record<string, unknown> | null) => {
       const verifyIdToken = jest
@@ -233,6 +232,7 @@ describe('AuthService (Email/Password & OTP)', () => {
         email: 'g@example.com',
         sub: 'google-123',
         name: 'Test User',
+        email_verified: true,
       });
       prisma.user.findFirst.mockResolvedValue(null);
       prisma.user.create.mockResolvedValue({
@@ -265,6 +265,7 @@ describe('AuthService (Email/Password & OTP)', () => {
         email: 'exists@example.com',
         sub: 'google-999',
         name: 'Ex Ists',
+        email_verified: true,
       });
       prisma.user.findFirst.mockResolvedValue({
         id: 'u2',
@@ -286,6 +287,19 @@ describe('AuthService (Email/Password & OTP)', () => {
       expect(prisma.user.update).toHaveBeenCalled();
       expect(result.isNewUser).toBe(false);
       expect(result.accessToken).toBe('signed-jwt-token');
+    });
+
+    it('rejects Google accounts whose email is not verified', async () => {
+      mockVerify({
+        email: 'unverified@example.com',
+        sub: 'google-555',
+        email_verified: false,
+      });
+
+      await expect(
+        service.googleLogin({ idToken: 'valid-token' }),
+      ).rejects.toThrow(UnauthorizedException);
+      expect(prisma.user.findFirst).not.toHaveBeenCalled();
     });
 
     it('throws UnauthorizedException when token verification fails', async () => {

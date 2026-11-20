@@ -82,9 +82,10 @@ export class MailService {
       this.logger.error(
         `❌ Failed to send email to ${email}: ${error.message}`,
       );
-      this.logger.warn(`🔑 LOCAL DEV OTP for ${email}: [ ${otp} ]`);
-
       if (this.configService.get('NODE_ENV') !== 'production') {
+        if (this.configService.get('LOG_DEV_OTP') === 'true') {
+          this.logger.warn(`LOCAL DEV OTP for ${email}: [ ${otp} ]`);
+        }
         return true;
       }
       throw error;

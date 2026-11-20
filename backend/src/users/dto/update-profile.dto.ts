@@ -40,6 +40,11 @@ export class UpdateProfileDto {
   password?: string;
 
   @IsOptional()
+  @IsString()
+  @Length(1, 100)
+  currentPassword?: string;
+
+  @IsOptional()
   @IsInt({ message: 'العمر يجب أن يكون رقماً' })
   @Min(18, { message: 'يجب أن يكون العمر 18 سنة على الأقل' })
   @Max(95, { message: 'العمر غير منطقي' })

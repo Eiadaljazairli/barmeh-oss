@@ -961,11 +961,7 @@ export class ListingsService {
     return { success: true, message: 'Booking request sent to seller' };
   }
 
-  async respondToBooking(
-    bookingId: string,
-    sellerId: string,
-    accept: boolean,
-  ) {
+  async respondToBooking(bookingId: string, sellerId: string, accept: boolean) {
     const booking = await this.prisma.booking.findUnique({
       where: { id: bookingId },
       include: { listing: { select: { title: true } } },
@@ -978,9 +974,7 @@ export class ListingsService {
       throw new BadRequestException('تمت معالجة هذا الطلب مسبقاً');
     }
 
-    const status = accept
-      ? BookingStatus.ACCEPTED
-      : BookingStatus.REJECTED;
+    const status = accept ? BookingStatus.ACCEPTED : BookingStatus.REJECTED;
 
     const updated = await this.prisma.booking.update({
       where: { id: bookingId },
@@ -1084,7 +1078,12 @@ export class ListingsService {
           },
         },
         seller: {
-          select: { id: true, firstName: true, lastName: true, avatarUrl: true },
+          select: {
+            id: true,
+            firstName: true,
+            lastName: true,
+            avatarUrl: true,
+          },
         },
       },
     });
@@ -1096,7 +1095,12 @@ export class ListingsService {
       include: {
         listing: { select: { id: true, title: true } },
         requester: {
-          select: { id: true, firstName: true, lastName: true, avatarUrl: true },
+          select: {
+            id: true,
+            firstName: true,
+            lastName: true,
+            avatarUrl: true,
+          },
         },
       },
     });

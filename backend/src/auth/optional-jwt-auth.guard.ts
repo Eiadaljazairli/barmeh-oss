@@ -29,8 +29,7 @@ export class OptionalJwtAuthGuard implements CanActivate {
       if (user && !user.isDeleted) {
         request['user'] = payload;
       }
-    } catch {
-    }
+    } catch {}
 
     return true;
   }

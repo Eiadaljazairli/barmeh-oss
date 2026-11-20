@@ -112,6 +112,29 @@ export class AuthService {
     return crypto.randomInt(100000, 999999).toString();
   }
 
+  private async consumeOtpAttempt(
+    otpKey: string,
+    attemptsKey: string,
+    provided: string,
+  ): Promise<void> {
+    const r = this.redis.client;
+    const stored = await r.get(otpKey);
+    if (!stored)
+      throw new UnauthorizedException('انتهت صلاحية الرمز أو لم يتم طلبه');
+
+    const attempts = await r.incr(attemptsKey);
+    if (attempts === 1) await r.expire(attemptsKey, this.OTP_TTL_SEC);
+    if (attempts > this.MAX_ATTEMPTS) {
+      await r.del(otpKey);
+      throw new UnauthorizedException(
+        'تم تجاوز عدد المحاولات، الرجاء طلب رمز جديد',
+      );
+    }
+
+    if (!this.compareOtp(stored, provided))
+      throw new UnauthorizedException('رمز التحقق غير صحيح');
+  }
+
   private compareOtp(stored: string, provided: string): boolean {
     try {
       return crypto.timingSafeEqual(Buffer.from(stored), Buffer.from(provided));
@@ -182,15 +205,12 @@ export class AuthService {
   async preVerifyEmailOtp(emailRaw: string, otp: string) {
     const r = this.redis.client;
     const email = emailRaw.trim().toLowerCase();
-    const key = this.emailOtpKey(email);
-    const stored = await r.get(key);
-
-    if (!stored)
-      throw new UnauthorizedException('انتهت صلاحية الرمز أو لم يتم طلبه');
-    if (!this.compareOtp(stored, otp))
-      throw new UnauthorizedException('رمز التحقق غير صحيح');
-
-    await r.expire(key, 300);
+    await this.consumeOtpAttempt(
+      this.emailOtpKey(email),
+      this.emailAttemptsKey(email),
+      otp,
+    );
+    await r.del(this.emailAttemptsKey(email));
 
     return { success: true };
   }
@@ -442,11 +462,11 @@ export class AuthService {
 
   async verify2fa(userId: string, code: string) {
     const r = this.redis.client;
-    const stored = await r.get(`2fa:admin:${userId}`);
-    if (!stored || !this.compareOtp(stored, code))
-      throw new UnauthorizedException('رمز التحقق غير صحيح أو انتهت صلاحيته');
+    const otpKey = `2fa:admin:${userId}`;
+    const attemptsKey = `2fa:admin:attempts:${userId}`;
+    await this.consumeOtpAttempt(otpKey, attemptsKey, code);
 
-    await r.del(`2fa:admin:${userId}`);
+    await Promise.all([r.del(otpKey), r.del(attemptsKey)]);
     const user = await this.prisma.user.findUnique({ where: { id: userId } });
     if (!user) throw new UnauthorizedException('المستخدم غير موجود');
 
@@ -474,7 +494,7 @@ export class AuthService {
         audience: this.googleAudiences,
       });
       const payload = ticket.getPayload();
-      if (!payload || !payload.email)
+      if (!payload || !payload.email || payload.email_verified !== true)
         throw new UnauthorizedException('فشل التحقق من حساب جوجل');
 
       const { email, sub: googleId, name, picture: avatarUrl } = payload;
@@ -513,10 +533,21 @@ export class AuthService {
           },
         });
       } else if (!user.googleId) {
+        const takeoverRisk = !user.isEmailVerified;
         user = await this.prisma.user.update({
           where: { id: user.id },
-          data: { googleId, isEmailVerified: true },
+          data: {
+            googleId,
+            isEmailVerified: true,
+            ...(takeoverRisk ? { password: null, refreshToken: null } : {}),
+          },
         });
+        if (takeoverRisk) {
+          await this.sessionsService.revokeAllForUser(
+            user.id,
+            'google_link_unverified_account',
+          );
+        }
       }
 
       const tokens = await this.getTokens(user.id, user.isAdmin);
@@ -618,8 +649,7 @@ export class AuthService {
       const otp = crypto.randomInt(100000, 999999).toString();
       const r = this.redis.client;
       await r.set(this.emailOtpKey(email), otp, 'EX', this.OTP_TTL_SEC);
-
-      this.logger.log(`✅ OTP generated for ${email}: ${otp} (Local Dev)`);
+      await r.del(this.emailAttemptsKey(email));
 
       try {
         await this.mail.sendResetOtp(email, otp);
@@ -643,19 +673,23 @@ export class AuthService {
   async resetPassword(dto: ResetPasswordDto) {
     const email = dto.email.trim().toLowerCase();
     const r = this.redis.client;
-    const stored = await r.get(this.emailOtpKey(email));
-
-    if (!stored || !this.compareOtp(stored, dto.otp)) {
-      throw new UnauthorizedException('رمز التحقق غير صحيح أو انتهى');
-    }
+    await this.consumeOtpAttempt(
+      this.emailOtpKey(email),
+      this.emailAttemptsKey(email),
+      dto.otp,
+    );
 
     const passwordHash = await argon2.hash(dto.newPassword);
-    await this.prisma.user.update({
+    const user = await this.prisma.user.update({
       where: { email },
-      data: { password: passwordHash },
+      data: { password: passwordHash, refreshToken: null },
     });
+    await this.sessionsService.revokeAllForUser(user.id, 'password_reset');
 
-    await r.del(this.emailOtpKey(email));
+    await Promise.all([
+      r.del(this.emailOtpKey(email)),
+      r.del(this.emailAttemptsKey(email)),
+    ]);
     return { message: 'تم تغيير كلمة المرور بنجاح' };
   }
 }

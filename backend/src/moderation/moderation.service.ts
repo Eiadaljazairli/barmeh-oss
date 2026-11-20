@@ -44,8 +44,6 @@ export class ModerationService {
       );
       return staticResult;
     }
-    if (staticResult.status === ModerationStatus.FLAGGED) {
-    }
 
     let aiResult: { isSafe: boolean; reason?: string };
     try {

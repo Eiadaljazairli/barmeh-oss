@@ -7,18 +7,23 @@ import {
   Param,
   UseGuards,
   Request,
+  ForbiddenException,
+  NotFoundException,
 } from '@nestjs/common';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { AdminGuard } from '../auth/admin.guard';
 import { PaymentsService } from './payments.service';
 import { PromotionsService } from './promotions.service';
 import { PaymentMethod } from '@prisma/client';
+import { PrismaService } from '../prisma/prisma.service';
+import type { AuthRequest } from '../auth/auth.types';
 
 @Controller('v1/payments')
 export class PaymentsController {
   constructor(
     private payments: PaymentsService,
     private promotions: PromotionsService,
+    private prisma: PrismaService,
   ) {}
 
   @Get('products')
@@ -53,7 +58,17 @@ export class PaymentsController {
 
   @Get('promotion-status/:listingId')
   @UseGuards(JwtAuthGuard)
-  getPromotionStatus(@Param('listingId') listingId: string) {
+  async getPromotionStatus(
+    @Request() req: AuthRequest,
+    @Param('listingId') listingId: string,
+  ) {
+    const listing = await this.prisma.listing.findUnique({
+      where: { id: listingId },
+      select: { userId: true },
+    });
+    if (!listing) throw new NotFoundException('الإعلان غير موجود');
+    if (listing.userId !== req.user.sub && !req.user.isAdmin)
+      throw new ForbiddenException('لا تملك صلاحية عرض هذه البيانات');
     return this.promotions.verifyPromotionStatus(listingId);
   }
 

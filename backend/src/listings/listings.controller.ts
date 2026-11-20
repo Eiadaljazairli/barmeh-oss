@@ -125,8 +125,7 @@ export class ListingsController {
         if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) {
           parsedAttributes = parsed;
         }
-      } catch {
-      }
+      } catch {}
     }
 
     return this.listingsService.findAll(
@@ -234,10 +233,7 @@ export class ListingsController {
   @Get(':id/my-booking')
   @UseGuards(JwtAuthGuard)
   @ApiOperation({ summary: 'My active booking for a listing (or null)' })
-  getMyBookingForListing(
-    @Request() req: AuthRequest,
-    @Param('id') id: string,
-  ) {
+  getMyBookingForListing(@Request() req: AuthRequest, @Param('id') id: string) {
     return this.listingsService.getMyBookingForListing(id, req.user.sub);
   }
 
@@ -253,7 +249,9 @@ export class ListingsController {
 
   @Get('bookings/:bookingId')
   @UseGuards(JwtAuthGuard)
-  @ApiOperation({ summary: 'Get a single booking request (requester or seller)' })
+  @ApiOperation({
+    summary: 'Get a single booking request (requester or seller)',
+  })
   getBooking(
     @Request() req: AuthRequest,
     @Param('bookingId') bookingId: string,
@@ -278,7 +276,11 @@ export class ListingsController {
     @Request() req: AuthRequest,
     @Param('bookingId') bookingId: string,
   ) {
-    return this.listingsService.respondToBooking(bookingId, req.user.sub, false);
+    return this.listingsService.respondToBooking(
+      bookingId,
+      req.user.sub,
+      false,
+    );
   }
 
   @Post(':id/bump')

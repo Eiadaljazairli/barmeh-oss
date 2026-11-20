@@ -15,8 +15,7 @@ import { PrismaModule } from '../prisma/prisma.module';
           config.get<string>('ELASTICSEARCH_NODE') || 'http://localhost:9200',
         auth: {
           username: config.get<string>('ELASTICSEARCH_USERNAME') || 'elastic',
-          password:
-            config.get<string>('ELASTICSEARCH_PASSWORD') || 'changeme',
+          password: config.get<string>('ELASTICSEARCH_PASSWORD') || 'changeme',
         },
         requestTimeout: 1000,
         maxRetries: 0,

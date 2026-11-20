@@ -37,11 +37,12 @@ export class SessionsService {
     });
   }
 
-  async revoke(sessionId: string, reason?: string) {
-    return this.prisma.loginSession.update({
-      where: { id: sessionId },
+  async revokeForUser(userId: string, sessionId: string, reason?: string) {
+    const result = await this.prisma.loginSession.updateMany({
+      where: { id: sessionId, userId, revokedAt: null },
       data: { revokedAt: new Date(), revokeReason: reason },
     });
+    return result.count > 0;
   }
 
   async revokeByJti(jti: string, reason?: string) {

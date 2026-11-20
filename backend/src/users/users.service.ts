@@ -2,12 +2,14 @@ import {
   Injectable,
   NotFoundException,
   BadRequestException,
+  UnauthorizedException,
   Logger,
 } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { SearchService } from '../search/search.service';
 import { AIService } from '../ai/ai.service';
 import * as bcrypt from 'bcrypt';
+import * as argon2 from 'argon2';
 import { City } from '@prisma/client';
 import { isValidRealName, sanitize } from '../common/utils/validation';
 import { ChatGateway } from '../chat/chat.gateway';
@@ -398,12 +400,38 @@ export class UsersService {
     return { message: 'تم تحويل التذكرة إلى قسم الشرطة في المحافظة المعنية.' };
   }
 
+  private async verifyPassword(hash: string, plain: string) {
+    try {
+      return hash.startsWith('$2a$') || hash.startsWith('$2b$')
+        ? await bcrypt.compare(plain, hash)
+        : await argon2.verify(hash, plain);
+    } catch {
+      return false;
+    }
+  }
+
   async updateProfile(
     userId: string,
     data: UpdateProfileDto,
-    isAdmin: boolean = false,
+    _isAdmin: boolean = false,
+    currentJti?: string,
   ) {
     const updateData: Record<string, unknown> = {};
+    const current = await this.prisma.user.findUnique({
+      where: { id: userId },
+      select: { email: true, password: true },
+    });
+    if (!current) throw new NotFoundException('المستخدم غير موجود');
+    const emailChanged =
+      !!data.email &&
+      data.email.trim().toLowerCase() !== (current.email ?? '').toLowerCase();
+    const sensitiveChange = emailChanged || !!data.password;
+    if (sensitiveChange && current.password) {
+      const ok =
+        !!data.currentPassword &&
+        (await this.verifyPassword(current.password, data.currentPassword));
+      if (!ok) throw new UnauthorizedException('كلمة السر الحالية غير صحيحة');
+    }
 
     if (data.firstName) {
       const cleanName = sanitize(data.firstName);
@@ -444,7 +472,7 @@ export class UsersService {
       updateData.lastName = cleanName;
     }
 
-    if (data.email) {
+    if (data.email && emailChanged) {
       const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
       if (!emailRegex.test(data.email)) {
         throw new BadRequestException('البريد الإلكتروني غير صالح');
@@ -455,20 +483,24 @@ export class UsersService {
       });
       if (existing)
         throw new BadRequestException('البريد الإلكتروني مستخدم بالفعل');
-      updateData.email = data.email;
+      updateData.email = data.email.trim().toLowerCase();
+      updateData.isEmailVerified = false;
     }
 
     if (data.password) {
-      if (!isAdmin) {
-        const passwordRegex =
-          /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[@$!%*?&])[A-Za-z\d@$!%*?&]{8,}$/;
-        if (!passwordRegex.test(data.password)) {
-          throw new BadRequestException(
-            'كلمة السر ضعيفة. يجب أن تحتوي على 8 خانات على الأقل، أحرف كبيرة وصغيرة، رقم، ورمز خاص (@$!%*?&)',
-          );
-        }
+      if (!current.password) {
+        throw new BadRequestException(
+          'لا يمكن تعيين كلمة سر من هنا، استخدم "نسيت كلمة السر"',
+        );
       }
-      updateData.password = await bcrypt.hash(data.password, 10);
+      const passwordRegex =
+        /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[@$!%*?&])[A-Za-z\d@$!%*?&]{8,}$/;
+      if (!passwordRegex.test(data.password)) {
+        throw new BadRequestException(
+          'كلمة السر ضعيفة. يجب أن تحتوي على 8 خانات على الأقل، أحرف كبيرة وصغيرة، رقم، ورمز خاص (@$!%*?&)',
+        );
+      }
+      updateData.password = await argon2.hash(data.password);
     }
     if (data.age !== undefined && data.age !== null) {
       updateData.age =
@@ -505,6 +537,17 @@ export class UsersService {
         createdAt: true,
       },
     });
+
+    if (sensitiveChange) {
+      await this.prisma.loginSession.updateMany({
+        where: {
+          userId,
+          revokedAt: null,
+          ...(currentJti ? { NOT: { jti: currentJti } } : {}),
+        },
+        data: { revokedAt: new Date(), revokeReason: 'credentials_changed' },
+      });
+    }
 
     return updatedUser;
   }
@@ -623,8 +666,7 @@ export class UsersService {
           blockerId_blockedId: { blockerId, blockedId },
         },
       });
-    } catch {
-    }
+    } catch {}
   }
 
   async getBlockedUsers(userId: string) {

@@ -62,7 +62,7 @@ function editDistance(s1: string, s2: string): number {
 
 export function validateRealName(
   name: string,
-  email?: string,
+  _email?: string,
 ): ValidationResult {
   let score = 100;
   const flags: string[] = [];
@@ -199,12 +199,6 @@ export function validateRealName(
   checkBlacklist(criminals, 80, 'اسم محظور');
   checkBlacklist(political, 80, 'اسم سياسي محظور');
   checkBlacklist(suspicious, 30, 'نمط مشبوه');
-
-  if (email && normalized.length > 3) {
-    const emailPrefix = email.split('@')[0].toLowerCase();
-    if (emailPrefix.includes(normalized) || normalized.includes(emailPrefix)) {
-    }
-  }
 
   score = Math.max(0, Math.min(100, score));
   return {
