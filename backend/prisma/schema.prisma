@@ -1,0 +1,645 @@
+generator client {
+  provider      = "prisma-client-js"
+  binaryTargets = ["native", "linux-musl-openssl-3.0.x", "linux-musl"]
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id                      String                  @id @default(uuid())
+  trustScore              Float                   @default(0.0) @map("trust_score")
+  isBlocked               Boolean                 @default(false) @map("is_blocked")
+  createdAt               DateTime                @default(now()) @map("created_at")
+  updatedAt               DateTime                @updatedAt @map("updated_at")
+  email                   String?                 @unique
+  avatarUrl               String?                 @map("avatar_url")
+  isDeleted               Boolean                 @default(false) @map("is_deleted")
+  lastLocationLat         Float?                  @map("last_location_lat")
+  lastLocationLng         Float?                  @map("last_location_lng")
+  isAdmin                 Boolean                 @default(false) @map("is_admin")
+  age                     Int?
+  gender                  Gender?
+  governorate             City?
+  isEmailVerified         Boolean                 @default(false) @map("is_email_verified")
+  userType                UserType                @default(CONSUMER) @map("user_type")
+  password                String?
+  googleId                String?                 @unique @map("google_id")
+  identityStatus          IdentityStatus          @default(UNVERIFIED) @map("identity_status")
+  refreshToken            String?                 @map("refresh_token")
+  subLocation             String?                 @map("sub_location")
+  trustLevel              TrustLevel              @default(NEWBIE) @map("trust_level")
+  firstName               String?                 @map("first_name")
+  lastName                String?                 @map("last_name")
+  username                String?                 @unique
+  expoPushToken           String?                 @map("expo_push_token")
+  chatsAsA                Chat[]                  @relation("ChatUserA")
+  chatsAsB                Chat[]                  @relation("ChatUserB")
+  favorites               Favorite[]
+  listings                Listing[]
+  loginSessions           LoginSession[]
+  merchantProfile         MerchantProfile?
+  messages                Message[]
+  notificationPreferences NotificationPreference?
+  notifications           Notification[]
+  purchases               Purchase[]
+  reportsReceived         Report[]                @relation("ReportedUser")
+  reportsMade             Report[]                @relation("Reporter")
+  reviewsReceived         Review[]                @relation("ReviewedUser")
+  reviewsGiven            Review[]                @relation("Reviewer")
+  savedSearches           SavedSearch[]
+  supportTickets          SupportTicket[]
+  ticketMessages          TicketMessage[]
+  transactions            Transaction[]
+  blocksReceived          UserBlock[]             @relation("Blocked")
+  blocksMade              UserBlock[]             @relation("Blocker")
+  bookingsRequested       Booking[]               @relation("BookingRequester")
+  bookingsReceived        Booking[]               @relation("BookingSeller")
+
+  @@index([isBlocked])
+  @@index([trustLevel])
+  @@map("users")
+}
+
+model MerchantProfile {
+  id            String    @id @default(uuid())
+  userId        String    @unique @map("user_id")
+  storeName     String    @map("store_name")
+  storeAddress  String?   @map("store_address")
+  taxId         String?   @map("tax_id")
+  businessHours Json?     @default("{}") @map("business_hours")
+  logoUrl       String?   @map("logo_url")
+  isVerified    Boolean   @default(false) @map("is_verified")
+  verifiedAt    DateTime? @map("verified_at")
+  createdAt     DateTime  @default(now()) @map("created_at")
+  updatedAt     DateTime  @updatedAt @map("updated_at")
+  user          User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("merchant_profiles")
+}
+
+model Review {
+  id             String   @id @default(uuid())
+  reviewerId     String   @map("reviewer_id")
+  reviewedUserId String   @map("reviewed_user_id")
+  rating         Int
+  comment        String?
+  createdAt      DateTime @default(now()) @map("created_at")
+  reviewedUser   User     @relation("ReviewedUser", fields: [reviewedUserId], references: [id], onDelete: Cascade)
+  reviewer       User     @relation("Reviewer", fields: [reviewerId], references: [id], onDelete: Cascade)
+
+  @@unique([reviewerId, reviewedUserId])
+  @@index([reviewedUserId])
+  @@map("reviews")
+}
+
+model UserBlock {
+  id        String   @id @default(uuid())
+  blockerId String   @map("blocker_id")
+  blockedId String   @map("blocked_id")
+  createdAt DateTime @default(now()) @map("created_at")
+  blocked   User     @relation("Blocked", fields: [blockedId], references: [id], onDelete: Cascade)
+  blocker   User     @relation("Blocker", fields: [blockerId], references: [id], onDelete: Cascade)
+
+  @@unique([blockerId, blockedId])
+  @@index([blockerId])
+  @@index([blockedId])
+  @@map("user_blocks")
+}
+
+model LoginSession {
+  id               String    @id @default(uuid())
+  userId           String    @map("user_id")
+  jti              String    @unique
+  deviceId         String?   @map("device_id")
+  deviceName       String?   @map("device_name")
+  userAgent        String?   @map("user_agent")
+  ip               String?
+  country          String?
+  refreshTokenHash String?   @map("refresh_token_hash")
+  lastUsedAt       DateTime  @default(now()) @map("last_used_at")
+  createdAt        DateTime  @default(now()) @map("created_at")
+  revokedAt        DateTime? @map("revoked_at")
+  revokeReason     String?   @map("revoke_reason")
+  user             User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, revokedAt])
+  @@index([jti])
+  @@map("login_sessions")
+}
+
+model Category {
+  id        String     @id @default(uuid())
+  slug      String     @unique
+  nameAr    String     @map("name_ar")
+  nameEn    String     @map("name_en")
+  icon      String?
+  parentId  String?    @map("parent_id")
+  order     Int        @default(0)
+  isActive  Boolean    @default(true) @map("is_active")
+  createdAt DateTime   @default(now()) @map("created_at")
+  parent    Category?  @relation("CategoryHierarchy", fields: [parentId], references: [id])
+  children  Category[] @relation("CategoryHierarchy")
+  listings  Listing[]
+
+  @@index([parentId, order])
+  @@index([isActive])
+  @@map("categories")
+}
+
+model Listing {
+  id                  String            @id @default(uuid())
+  userId              String            @map("user_id")
+  title               String
+  description         String
+  price               Float
+  city                City
+  categoryId          String            @map("category_id")
+  status              ListingStatus     @default(ACTIVE)
+  createdAt           DateTime          @default(now()) @map("created_at")
+  updatedAt           DateTime          @updatedAt @map("updated_at")
+  deletedAt           DateTime?         @map("deleted_at")
+  discount            Boolean           @default(false)
+  discountPercentage  Int?              @map("discount_percentage")
+  bumpedAt            DateTime          @default(now()) @map("bumped_at")
+  isFeatured          Boolean           @default(false) @map("is_featured")
+  latitude            Float?
+  longitude           Float?
+  metadata            Json?             @default("{}")
+  subLocation         String?           @map("sub_location")
+  priceStatus         PriceStatus       @default(NEGOTIABLE) @map("price_status")
+  expiresAt           DateTime?         @map("expires_at")
+  moderationFlaggedBy String?           @map("moderation_flagged_by")
+  moderationReason    String?           @map("moderation_reason")
+  moderationScore     Float?            @map("moderation_score")
+  moderationStatus    ModerationStatus  @default(PENDING) @map("moderation_status")
+  reportCount         Int               @default(0) @map("report_count")
+  promotionExpiresAt  DateTime?         @map("promotion_expires_at")
+  promotionOrder      Int               @default(0) @map("promotion_order")
+  promotionType       PromotionType?    @map("promotion_type")
+  currency            Currency          @default(SYP) @map("currency")
+  activePromotions    ActivePromotion[]
+  bookings            Booking[]
+  chats               Chat[]
+  favoritedBy         Favorite[]
+  images              Image[]
+  category            Category          @relation(fields: [categoryId], references: [id])
+  user                User              @relation(fields: [userId], references: [id])
+  messages            Message[]
+  moderationLogs      ModerationLog[]
+  purchases           Purchase[]
+  reports             Report[]
+
+  @@index([status, city, categoryId, bumpedAt(sort: Desc)])
+  @@index([moderationStatus, createdAt(sort: Desc)])
+  @@index([userId, createdAt(sort: Desc)])
+  @@index([city, categoryId, price])
+  @@index([deletedAt])
+  @@index([latitude, longitude, status])
+  @@index([categoryId, price, status])
+  @@index([isFeatured, createdAt(sort: Desc)])
+  @@index([promotionType, promotionExpiresAt])
+  @@index([promotionOrder(sort: Desc), bumpedAt(sort: Desc)])
+  @@map("listings")
+}
+
+model Image {
+  id        String   @id @default(uuid())
+  listingId String   @map("listing_id")
+  thumbUrl  String   @map("thumb_url")
+  mediumUrl String   @map("medium_url")
+  hash      String?
+  order     Int      @default(0)
+  createdAt DateTime @default(now()) @map("created_at")
+  listing   Listing  @relation(fields: [listingId], references: [id], onDelete: Cascade)
+
+  @@index([listingId, order])
+  @@index([hash])
+  @@map("images")
+}
+
+model Favorite {
+  userId    String   @map("user_id")
+  listingId String   @map("listing_id")
+  createdAt DateTime @default(now()) @map("created_at")
+  listing   Listing  @relation(fields: [listingId], references: [id], onDelete: Cascade)
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@id([userId, listingId])
+  @@index([userId, createdAt(sort: Desc)])
+  @@map("favorites")
+}
+
+model Chat {
+  id            String    @id @default(uuid())
+  userAId       String    @map("user_a_id")
+  userBId       String    @map("user_b_id")
+  lastMessageAt DateTime  @default(now()) @map("last_message_at")
+  createdAt     DateTime  @default(now()) @map("created_at")
+  listingId     String?   @map("listing_id")
+  isArchivedByA Boolean   @default(false) @map("is_archived_by_a")
+  isArchivedByB Boolean   @default(false) @map("is_archived_by_b")
+  listing       Listing?  @relation(fields: [listingId], references: [id])
+  userA         User      @relation("ChatUserA", fields: [userAId], references: [id])
+  userB         User      @relation("ChatUserB", fields: [userBId], references: [id])
+  messages      Message[]
+
+  @@unique([userAId, userBId, listingId])
+  @@index([userAId, lastMessageAt(sort: Desc)])
+  @@index([userBId, lastMessageAt(sort: Desc)])
+  @@index([listingId])
+  @@map("chats")
+}
+
+model Message {
+  id                 String    @id @default(uuid())
+  chatId             String    @map("chat_id")
+  senderId           String    @map("sender_id")
+  content            String
+  readAt             DateTime? @map("read_at")
+  createdAt          DateTime  @default(now()) @map("created_at")
+  deletedAt          DateTime? @map("deleted_at")
+  listingId          String?   @map("listing_id")
+  deletedForReceiver Boolean   @default(false) @map("deleted_for_receiver")
+  deletedForSender   Boolean   @default(false) @map("deleted_for_sender")
+  chat               Chat      @relation(fields: [chatId], references: [id], onDelete: Cascade)
+  listing            Listing?  @relation(fields: [listingId], references: [id])
+  sender             User      @relation(fields: [senderId], references: [id])
+
+  @@index([chatId, createdAt(sort: Desc)])
+  @@index([deletedAt])
+  @@index([chatId, senderId, createdAt])
+  @@map("messages")
+}
+
+model Report {
+  id             String   @id @default(uuid())
+  reporterId     String   @map("reporter_id")
+  listingId      String?  @map("listing_id")
+  reason         String
+  createdAt      DateTime @default(now()) @map("created_at")
+  reportedUserId String?  @map("reported_user_id")
+  listing        Listing? @relation(fields: [listingId], references: [id], onDelete: Cascade)
+  reportedUser   User?    @relation("ReportedUser", fields: [reportedUserId], references: [id], onDelete: Cascade)
+  reporter       User     @relation("Reporter", fields: [reporterId], references: [id])
+
+  @@unique([reporterId, listingId], name: "unique_listing_report")
+  @@unique([reporterId, reportedUserId], name: "unique_user_report")
+  @@index([listingId])
+  @@index([reportedUserId])
+  @@map("reports")
+}
+
+model ModerationLog {
+  id          String   @id @default(uuid())
+  listingId   String?  @map("listing_id")
+  messageId   String?  @map("message_id")
+  userId      String?  @map("user_id")
+  decision    String
+  reason      String?
+  source      String
+  rawResponse Json?    @map("raw_response")
+  createdAt   DateTime @default(now()) @map("created_at")
+  listing     Listing? @relation(fields: [listingId], references: [id])
+
+  @@index([listingId])
+  @@index([userId])
+  @@index([createdAt(sort: Desc)])
+  @@index([source])
+  @@map("moderation_logs")
+}
+
+model SupportTicket {
+  id          String             @id @default(uuid())
+  userId      String             @map("user_id")
+  subject     String
+  description String
+  city        City?
+  status      TicketStatus       @default(OPEN)
+  isEscalated Boolean            @default(false) @map("is_escalated")
+  createdAt   DateTime           @default(now()) @map("created_at")
+  updatedAt   DateTime           @updatedAt @map("updated_at")
+  user        User               @relation(fields: [userId], references: [id])
+  attachments TicketAttachment[]
+  messages    TicketMessage[]
+
+  @@index([userId])
+  @@index([status])
+  @@index([city])
+  @@map("support_tickets")
+}
+
+model TicketMessage {
+  id           String             @id @default(uuid())
+  ticketId     String             @map("ticket_id")
+  senderId     String?            @map("sender_id")
+  isAdminReply Boolean            @default(false) @map("is_admin_reply")
+  content      String
+  createdAt    DateTime           @default(now()) @map("created_at")
+  attachments  TicketAttachment[]
+  sender       User?              @relation(fields: [senderId], references: [id])
+  ticket       SupportTicket      @relation(fields: [ticketId], references: [id], onDelete: Cascade)
+
+  @@index([ticketId, createdAt])
+  @@map("ticket_messages")
+}
+
+model TicketAttachment {
+  id        String         @id @default(uuid())
+  ticketId  String?        @map("ticket_id")
+  messageId String?        @map("message_id")
+  fileUrl   String         @map("file_url")
+  fileType  String         @map("file_type")
+  createdAt DateTime       @default(now()) @map("created_at")
+  message   TicketMessage? @relation(fields: [messageId], references: [id], onDelete: Cascade)
+  ticket    SupportTicket? @relation(fields: [ticketId], references: [id], onDelete: Cascade)
+
+  @@index([ticketId])
+  @@map("ticket_attachments")
+}
+
+model Purchase {
+  id        String   @id @default(uuid())
+  userId    String   @map("user_id")
+  listingId String   @map("listing_id")
+  createdAt DateTime @default(now()) @map("created_at")
+  listing   Listing  @relation(fields: [listingId], references: [id], onDelete: Cascade)
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, listingId])
+  @@index([userId, createdAt(sort: Desc)])
+  @@map("purchases")
+}
+
+model Booking {
+  id          String        @id @default(uuid())
+  listingId   String        @map("listing_id")
+  requesterId String        @map("requester_id")
+  sellerId    String        @map("seller_id")
+  status      BookingStatus @default(PENDING)
+  createdAt   DateTime      @default(now()) @map("created_at")
+  updatedAt   DateTime      @updatedAt @map("updated_at")
+  respondedAt DateTime?     @map("responded_at")
+  listing     Listing       @relation(fields: [listingId], references: [id], onDelete: Cascade)
+  requester   User          @relation("BookingRequester", fields: [requesterId], references: [id], onDelete: Cascade)
+  seller      User          @relation("BookingSeller", fields: [sellerId], references: [id], onDelete: Cascade)
+
+  @@index([sellerId, status, createdAt(sort: Desc)])
+  @@index([requesterId, createdAt(sort: Desc)])
+  @@index([listingId])
+  @@map("bookings")
+}
+
+model Notification {
+  id          String           @id @default(uuid())
+  userId      String           @map("user_id")
+  title       String
+  body        String
+  type        NotificationType
+  referenceId String?          @map("reference_id")
+  isRead      Boolean          @default(false) @map("is_read")
+  createdAt   DateTime         @default(now()) @map("created_at")
+  user        User             @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, createdAt(sort: Desc)])
+  @@index([userId, isRead, createdAt(sort: Desc)])
+  @@map("notifications")
+}
+
+model NotificationPreference {
+  userId       String  @id @map("user_id")
+  messages     Boolean @default(true)
+  newListings  Boolean @default(true)
+  priceUpdates Boolean @default(true)
+  system       Boolean @default(true)
+  user         User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("notification_preferences")
+}
+
+model SavedSearch {
+  id             String   @id @default(uuid())
+  userId         String   @map("user_id")
+  query          String?
+  filters        Json     @default("{}")
+  lastNotifiedAt DateTime @default(now()) @map("last_notified_at")
+  createdAt      DateTime @default(now()) @map("created_at")
+  user           User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@map("saved_searches")
+}
+
+model PromotionProduct {
+  id              String        @id @default(uuid())
+  type            PromotionType
+  durationDays    Int           @map("duration_days")
+  priceSYP        Int           @map("price_syp")
+  label           String?
+  discountPercent Int           @default(0) @map("discount_percent")
+  isActive        Boolean       @default(true) @map("is_active")
+  createdAt       DateTime      @default(now()) @map("created_at")
+  updatedAt       DateTime      @updatedAt @map("updated_at")
+  transactions    Transaction[]
+
+  @@unique([type, durationDays])
+  @@index([isActive, type])
+  @@map("promotion_products")
+}
+
+model Transaction {
+  id              String           @id @default(uuid())
+  userId          String           @map("user_id")
+  listingId       String?          @map("listing_id")
+  productId       String           @map("product_id")
+  amountSYP       Int              @map("amount_syp")
+  paymentMethod   PaymentMethod    @map("payment_method")
+  status          PaymentStatus    @default(PENDING)
+  gatewayRef      String?          @map("gateway_ref")
+  gatewayResponse Json?            @map("gateway_response")
+  receiptUrl      String?          @map("receipt_url")
+  proofImageUrl   String?          @map("proof_image_url")
+  notes           String?
+  processedBy     String?          @map("processed_by")
+  processedAt     DateTime?        @map("processed_at")
+  createdAt       DateTime         @default(now()) @map("created_at")
+  updatedAt       DateTime         @updatedAt @map("updated_at")
+  activePromotion ActivePromotion?
+  product         PromotionProduct @relation(fields: [productId], references: [id])
+  user            User             @relation(fields: [userId], references: [id])
+
+  @@index([userId, createdAt(sort: Desc)])
+  @@index([status])
+  @@index([paymentMethod, status])
+  @@index([gatewayRef])
+  @@map("transactions")
+}
+
+model ActivePromotion {
+  id            String        @id @default(uuid())
+  listingId     String        @map("listing_id")
+  transactionId String        @unique @map("transaction_id")
+  type          PromotionType
+  startsAt      DateTime      @default(now()) @map("starts_at")
+  expiresAt     DateTime      @map("expires_at")
+  isActive      Boolean       @default(true) @map("is_active")
+  createdAt     DateTime      @default(now()) @map("created_at")
+  listing       Listing       @relation(fields: [listingId], references: [id], onDelete: Cascade)
+  transaction   Transaction   @relation(fields: [transactionId], references: [id])
+
+  @@index([listingId, isActive])
+  @@index([expiresAt, isActive])
+  @@index([type, isActive])
+  @@map("active_promotions")
+}
+
+model PlatformSetting {
+  key         String   @id
+  value       String
+  description String?
+  updatedAt   DateTime @updatedAt @map("updated_at")
+  updatedBy   String?  @map("updated_by")
+
+  @@map("platform_settings")
+}
+
+model AuditLog {
+  id         String   @id @default(uuid())
+  entityType String   @map("entity_type")
+  entityId   String   @map("entity_id")
+  action     String
+  actor      String
+  changes    Json
+  reason     String?
+  ipAddress  String?  @map("ip_address")
+  userAgent  String?  @map("user_agent")
+  createdAt  DateTime @default(now()) @map("created_at")
+
+  @@index([entityType, entityId])
+  @@index([createdAt(sort: Desc)])
+  @@index([actor])
+  @@index([action])
+  @@map("audit_logs")
+}
+
+enum IdentityStatus {
+  UNVERIFIED
+  PENDING
+  VERIFIED
+}
+
+enum TrustLevel {
+  NEWBIE
+  VERIFIED
+  TRUSTED
+  VIP
+}
+
+enum City {
+  DAMASCUS
+  ALEPPO
+  HOMS
+  LATAKIA
+  TARTUS
+  HAMA
+  RURAL_DAMASCUS
+  IDLIB
+  DEIR_EZ_ZOR
+  RAQQA
+  HASAKAH
+  DARAA
+  SUWAYDA
+  QUNEITRA
+  QAMISHLI
+}
+
+enum Currency {
+  SYP
+  USD
+  TRY
+  EUR
+}
+
+enum ListingStatus {
+  ACTIVE
+  SOLD
+  BLOCKED
+  PENDING
+  DELETED
+  EXPIRED
+  RESERVED
+}
+
+enum ModerationStatus {
+  APPROVED
+  PENDING
+  FLAGGED
+  REJECTED
+  AUTO_REJECTED
+}
+
+enum PriceStatus {
+  FIXED
+  NEGOTIABLE
+  FREE
+}
+
+enum Gender {
+  MALE
+  FEMALE
+  OTHER
+}
+
+enum UserType {
+  MERCHANT
+  CONSUMER
+}
+
+enum TicketStatus {
+  OPEN
+  IN_PROGRESS
+  CLOSED
+  ESCALATED_TO_POLICE
+}
+
+enum NotificationType {
+  INFO
+  PROMO
+  MESSAGE
+  LISTING_UPDATE
+  SYSTEM
+  BOOKING
+}
+
+enum BookingStatus {
+  PENDING
+  ACCEPTED
+  REJECTED
+  CANCELLED
+}
+
+enum PromotionType {
+  TOP_PLACEMENT
+  FEATURED
+  URGENT
+}
+
+enum PaymentMethod {
+  CARD
+  USDT
+  SYRIATEL_CASH
+  MTN_CASH
+  BANK_TRANSFER
+  FREE
+}
+
+enum PaymentStatus {
+  PENDING
+  PROCESSING
+  COMPLETED
+  FAILED
+  REFUNDED
+  CANCELLED
+}

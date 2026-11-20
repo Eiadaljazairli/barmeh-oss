@@ -1,0 +1,25 @@
+appId: com.example.barmeh
+---
+- launchApp:
+    clearState: true
+
+# 1. Welcome Screen
+- assertVisible: "تسجيل الدخول"
+- tapOn: "تسجيل الدخول"
+
+# 2. Login Flow
+- assertVisible: "أدخل بريدك الإلكتروني"
+- tapOn: "أدخل بريدك الإلكتروني"
+- inputText: "test@example.com"
+- tapOn: "متابعة"
+
+# 3. OTP Verification
+- assertVisible: "الرجاء إدخال الرمز"
+- tapOn: "0000"
+- inputText: "1234"
+- tapOn: "تأكيد الرمز"
+
+# 4. Navigation to Add Listing
+- assertVisible: "إضافة إعلان"
+- tapOn: "إضافة إعلان"
+- assertVisible: "تفاصيل الإعلان"
