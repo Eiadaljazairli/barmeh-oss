@@ -1,0 +1,29 @@
+#!/bin/sh
+
+RED='\033[0;31m'
+GREEN='\033[0;32m'
+NC='\033[0m'
+
+echo "🔍 Running pre-commit checks..."
+
+if git diff --cached --name-only | grep -q "^backend/"; then
+  echo "📦 Backend changes detected — running lint-staged..."
+  cd backend && npx lint-staged
+  if [ $? -ne 0 ]; then
+    echo "${RED}❌ Backend lint-staged failed. Fix errors before committing.${NC}"
+    exit 1
+  fi
+  cd ..
+fi
+
+if git diff --cached --name-only | grep -q "^barmeh-mobile/"; then
+  echo "📱 Mobile changes detected — running lint-staged..."
+  cd barmeh-mobile && npx lint-staged
+  if [ $? -ne 0 ]; then
+    echo "${RED}❌ Mobile lint-staged failed. Fix errors before committing.${NC}"
+    exit 1
+  fi
+  cd ..
+fi
+
+echo "${GREEN}✅ Pre-commit checks passed!${NC}"

@@ -1,0 +1,21 @@
+appId: com.example.barmeh
+---
+- launchApp:
+    clearState: true
+
+- assertVisible: "تسجيل الدخول"
+- tapOn: "تسجيل الدخول"
+
+- assertVisible: "أدخل بريدك الإلكتروني"
+- tapOn: "أدخل بريدك الإلكتروني"
+- inputText: "test@example.com"
+- tapOn: "متابعة"
+
+- assertVisible: "الرجاء إدخال الرمز"
+- tapOn: "0000"
+- inputText: "1234"
+- tapOn: "تأكيد الرمز"
+
+- assertVisible: "إضافة إعلان"
+- tapOn: "إضافة إعلان"
+- assertVisible: "تفاصيل الإعلان"
